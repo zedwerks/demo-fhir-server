@@ -1,0 +1,2 @@
+# demo-fhir-server
+A simple fhir server for demonstrating SMART on FHIR Keycloak Extensions
