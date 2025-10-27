@@ -1,18 +1,15 @@
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import dotenv from "dotenv";
+import { metadata } from "./fhir/metadata.js"; // Import metadata from fhir/metadata.js
+import { smartConfiguration } from "./fhir/smart-configuration.js"; // Import smart configuration
+import {  AUTH_SERVER_BASE_URL, BASE_URL, SERVER_PORT } from "./env/env.js"; // Import environment variables
 
-dotenv.config();
 
 const app = express();
 app.use(express.json());
 app.use(cors());
 app.use(morgan("dev"));
-
-const PORT = process.env.PORT || 3000;
-const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
-const AUTH_SERVER_BASE_URL = process.env.AUTH_SERVER_BASE_URL || BASE_URL;
 
 // ---- SUPER SIMPLE BEARER CHECK ----
 function requireBearer(req, res, next) {
@@ -78,64 +75,11 @@ addPatient({
 
 // ---- SMART WELL-KNOWN & CAPABILITY ----
 app.get("/.well-known/smart-configuration", (req, res) => {
-  res.json({
-    issuer: AUTH_SERVER_BASE_URL,
-    authorization_endpoint: `${AUTH_SERVER_BASE_URL}/oauth2/authorize`,
-    token_endpoint: `${AUTH_SERVER_BASE_URL}/oauth2/token`,
-    introspection_endpoint: `${AUTH_SERVER_BASE_URL}/oauth2/introspect`,
-    scopes_supported: [
-      "openid",
-      "fhirUser",
-      "launch",
-      "launch/patient",
-      "patient/*.read",
-      "offline_access"
-    ],
-    response_types_supported: ["code"],
-    grant_types_supported: ["authorization_code", "refresh_token", "client_credentials"],
-    token_endpoint_auth_methods_supported: ["client_secret_basic", "none"],
-    capabilities: [
-      "context-ehr",
-      "permission-patient",
-      "permission-offline"
-    ]
-  });
+  res.json(smartConfiguration);
 });
 
 app.get("/metadata", (req, res) => {
-  res.json({
-    resourceType: "CapabilityStatement",
-    status: "active",
-    date: new Date().toISOString(),
-    kind: "instance",
-    fhirVersion: "4.0.1",
-    format: ["json"],
-    rest: [
-      {
-        mode: "server",
-        security: {
-          service: [{
-            coding: [{
-              system: "http://terminology.hl7.org/CodeSystem/restful-security-service",
-              code: "SMART-on-FHIR"
-            }]
-          }],
-          extension: [
-            {
-              url: "http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris",
-              extension: [
-                { url: "authorize", valueUri: `${AUTH_SERVER_BASE_URL}/oauth2/authorize` },
-                { url: "token", valueUri: `${AUTH_SERVER_BASE_URL}/oauth2/token` }
-              ]
-            }
-          ]
-        },
-        resource: [
-          { type: "Patient", interaction: [{ code: "read" }, { code: "search-type" }] }
-        ]
-      }
-    ]
-  });
+  res.json(metadata);
 });
 
 // ---- PATIENT READ (BY ID) ----
@@ -196,6 +140,8 @@ app.get("/Patient", requireBearer, (req, res) => {
   res.json(bundle);
 });
 
+app.set('json spaces', 2);
+
 // ---- ROOT ----
 app.get("/", (req, res) => {
   res.json({
@@ -207,12 +153,12 @@ app.get("/", (req, res) => {
       `${BASE_URL}/Patient?identifier=${encodeURIComponent(MRN_SYSTEM)}|123456`,
       `${BASE_URL}/Patient?identifier=654321`
     ],
-    tokenHint: `POST ${AUTH_SERVER_BASE_URL}/oauth2/token to get a bearer token`
+    tokenHint: `POST ${AUTH_SERVER_BASE_URL}/openid-connect/oauth2/token to get a bearer token`
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`SMART FHIR stub listening on ${BASE_URL}`);
+app.listen(SERVER_PORT, () => {
+  console.log(`SMART FHIR server (this): ${BASE_URL}`);
   console.log(`MRN system: ${MRN_SYSTEM}`);
   console.log(`Auth server base URL: ${AUTH_SERVER_BASE_URL}`);
 });
