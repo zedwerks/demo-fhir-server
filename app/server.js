@@ -4,7 +4,8 @@ import morgan from "morgan";
 import { metadata } from "./fhir/metadata.js"; // Import metadata from fhir/metadata.js
 import { smartConfiguration } from "./fhir/smart-configuration.js"; // Import smart configuration
 import {  AUTH_SERVER_BASE_URL, BASE_URL, SERVER_PORT } from "./env/env.js"; // Import environment variables
-
+import { readJsonFile } from "./lib/readJsonFile.js";
+import path from "path";
 
 const app = express();
 app.use(express.json());
@@ -13,9 +14,9 @@ app.use(morgan("dev"));
 
 // ---- SUPER SIMPLE BEARER CHECK ----
 function requireBearer(req, res, next) {
-  const auth = req.headers.authorization || "";
+  const auth = req.headers.authorization;
   const [scheme, token] = auth.split(" ");
-  if (scheme !== "Bearer" || token !== DEMO_BEARER_TOKEN) {
+  if (scheme !== "Bearer") {
     return res.status(401).json({
       resourceType: "OperationOutcome",
       issue: [
@@ -51,26 +52,26 @@ function addPatient(p) {
 // Seed two example patients
 addPatient({
   resourceType: "Patient",
-  id: "pat-123",
+  id: "1234567890",
   active: true,
   identifier: [
-    { system: MRN_SYSTEM, value: "123456" }
+    { system: MRN_SYSTEM, value: "1234567890" }
   ],
-  name: [{ use: "official", family: "Fitzgerald", given: ["Alexandra", "Maximiliana"] }],
+  name: [{ use: "official", family: "Smith", given: ["Jane", "Alexandra"] }],
   gender: "female",
-  birthDate: "1980-12-01"
+  birthDate: "2008-12-01"
 });
 
 addPatient({
   resourceType: "Patient",
-  id: "pat-654",
+  id: "9876543210",
   active: true,
   identifier: [
-    { system: MRN_SYSTEM, value: "654321" }
+    { system: MRN_SYSTEM, value: "9876543210" }
   ],
-  name: [{ use: "official", family: "Montagne-Bellerose", given: ["Elizabeth"] }],
-  gender: "female",
-  birthDate: "1982-05-14"
+  name: [{ use: "official", family: "Franklin", given: ["John"] }],
+  gender: "male",
+  birthDate: "2010-05-20"
 });
 
 // ---- SMART WELL-KNOWN & CAPABILITY ----
@@ -155,6 +156,73 @@ app.get("/", (req, res) => {
     ],
     tokenHint: `POST ${AUTH_SERVER_BASE_URL}/openid-connect/oauth2/token to get a bearer token`
   });
+});
+
+
+app.get("/Immunization", async (req, res) => {
+  try {
+    const { patient } = req.query;
+
+    if (!patient) {
+      return res.status(400).json({
+        error: "Missing required query parameter: patient",
+      });
+    }
+
+    // For demo: assume each patient's immunizations are stored under
+    // ./data/immunizations/<patient>.json or as multiple JSON files in a folder
+    const folderPath = path.join(process.cwd(), "data", "immunizations");
+
+    // Example file naming convention:
+    // immunization-<patientId>-1.json, immunization-<patientId>-2.json
+    // Or one combined file: immunization-<patientId>.json
+
+    // Option 1 — Combined single file per patient
+    const combinedPath = path.join(folderPath, `${patient}.json`);
+
+    try {
+      const combined = await readJsonFile(combinedPath);
+      return res.status(200).json({
+        resourceType: "Bundle",
+        type: "searchset",
+        total: Array.isArray(combined) ? combined.length : 1,
+        entry: Array.isArray(combined)
+          ? combined.map((r) => ({ resource: r }))
+          : [{ resource: combined }],
+      });
+    } catch {
+      // fallback to multi-file mode
+    }
+
+    // Option 2 — Multiple JSON files per patient
+    const fs = await import("fs/promises");
+    const files = await fs.readdir(folderPath);
+    const immunizationFiles = files.filter((f) =>
+      f.startsWith(`${patient}`)
+    );
+
+    if (immunizationFiles.length === 0) {
+      return res
+        .status(404)
+        .json({ error: `No immunizations found for patient ${patient}` });
+    }
+
+    const immunizations = await Promise.all(
+      immunizationFiles.map(async (file) =>
+        readJsonFile(path.join(folderPath, file))
+      )
+    );
+
+    res.status(200).json({
+      resourceType: "Bundle",
+      type: "searchset",
+      total: immunizations.length,
+      entry: immunizations.map((r) => ({ resource: r })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to retrieve immunizations" });
+  }
 });
 
 app.listen(SERVER_PORT, () => {

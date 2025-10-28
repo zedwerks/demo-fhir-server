@@ -1,0 +1,10 @@
+services:
+  expo-web:
+    build: ./app
+    container_name: demo-fhir-server
+    ports:
+      - "9000:9000"
+    environment:
+      - AUTH_SERVER_BASE_URL=https://kc.zedwerks.com/realms/smart
+      - MRN_SYSTEM=http://cemr.mis-health.org/mrn
+    restart: unless-stopped
