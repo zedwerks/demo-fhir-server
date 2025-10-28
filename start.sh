@@ -19,6 +19,8 @@ then
     exit
 fi
 
+docker network create demonetwork || echo "Network 'demonetwork' already exists."
+
 echo "Building Services..."
 docker compose down -v
 if docker compose build --no-cache; then

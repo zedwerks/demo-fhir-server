@@ -8,3 +8,9 @@ services:
       - AUTH_SERVER_BASE_URL=https://kc.zedwerks.com/realms/smart
       - MRN_SYSTEM=http://cemr.mis-health.org/mrn
     restart: unless-stopped
+    networks:
+      - demonetwork
+
+networks:
+  demonetwork:
+    external: true
