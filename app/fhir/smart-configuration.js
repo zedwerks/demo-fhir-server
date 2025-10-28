@@ -13,9 +13,10 @@ export const smartConfiguration = {
       "fhirUser",
       "launch",
       "launch/patient",
+      "patient/Patient.read",
+      "patient/Immunization.read",
       "user/*.read",
-      "user/Patient.read",
-      "offline_access"
+      "user/Patient.read"
     ],
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token", "client_credentials"],
