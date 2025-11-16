@@ -1,9 +1,9 @@
 import express from "express";
 import cors from "cors";
 import morgan from "morgan";
-import { metadata } from "./fhir/metadata.js"; // Import metadata from fhir/metadata.js
+import { metadata } from "./fhir/metadata.js"; // Import metadata from metadata.js
 import { smartConfiguration } from "./fhir/smart-configuration.js"; // Import smart configuration
-import {  AUTH_SERVER_BASE_URL, BASE_URL, SERVER_PORT } from "./env/env.js"; // Import environment variables
+import { AUTH_SERVER_BASE_URL, BASE_URL, SERVER_PORT } from "./env/env.js"; // Import environment variables
 import { readJsonFile } from "./lib/readJsonFile.js";
 import path from "path";
 
@@ -158,6 +158,33 @@ app.get("/", (req, res) => {
   });
 });
 
+app.get("/fhir", (req, res) => {
+  res.json({
+    resourceType: "CapabilityStatement",
+    status: "active",
+    date: new Date().toISOString(),
+    publisher: "SMART FHIR Server",
+    kind: "instance",
+    software: {
+      name: "SMART FHIR Server",
+      version: "1.0.0"
+    },
+    fhirVersion: "4.0.1",
+    format: ["json"],
+    rest: [
+      {
+        mode: "server",
+        resource: [
+          { type: "Patient", interaction: [{ code: "read" }, { code: "search-type" }] },
+          { type: "Immunization", interaction: [{ code: "read" }, { code: "search-type" }] },
+          { type: "Bundle", interaction: [{ code: "transaction" }] }
+        ]
+      }
+    ]
+  });
+});
+
+
 
 app.get("/Immunization", async (req, res) => {
   try {
@@ -223,6 +250,38 @@ app.get("/Immunization", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Failed to retrieve immunizations" });
   }
+});
+
+app.post('/', (req, res) => {
+  const body = req.body;
+
+  // Validate JSON body exists
+  if (!body || typeof body !== 'object') {
+    return res.status(400).json({
+      resourceType: "OperationOutcome",
+      issue: [{
+        severity: "error",
+        code: "invalid",
+        diagnostics: "Request body must be a JSON object."
+      }]
+    });
+  }
+
+  // Validate FHIR Bundle + transaction
+  if (body.resourceType !== "Bundle" || body.type !== "transaction") {
+    return res.status(400).json({
+      resourceType: "OperationOutcome",
+      issue: [{
+        severity: "error",
+        code: "not-supported",
+        diagnostics: "Only Bundle.type = 'transaction' is supported."
+      }]
+    });
+  }
+
+  // All good → echo response
+  // @todo: implement actual transaction processing
+  return res.status(200).json(body);
 });
 
 app.listen(SERVER_PORT, () => {
