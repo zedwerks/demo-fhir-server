@@ -6,9 +6,16 @@ import { smartConfiguration } from "./fhir/smart-configuration.js"; // Import sm
 import { AUTH_SERVER_BASE_URL, BASE_URL, SERVER_PORT } from "./env/env.js"; // Import environment variables
 import { readJsonFile } from "./lib/readJsonFile.js";
 import path from "path";
+import { Console } from "console";
 
 const app = express();
-app.use(express.json());
+
+app.use(express.json({
+  type: (req) => {
+    const ct = req.headers['content-type'] || '';
+    return ct.includes('application/json') || ct.includes('+json');
+  }
+}));
 app.use(cors());
 app.use(morgan("dev"));
 
@@ -255,6 +262,8 @@ app.get("/Immunization", async (req, res) => {
 app.post('/', (req, res) => {
   const body = req.body;
 
+  console.log("Received transaction request:", body);
+
   // Validate JSON body exists
   if (!body || typeof body !== 'object') {
     return res.status(400).json({
@@ -266,6 +275,9 @@ app.post('/', (req, res) => {
       }]
     });
   }
+
+  console.log("body.type:", body.type);
+  console.log("body.resourceType:", body.resourceType);
 
   // Validate FHIR Bundle + transaction
   if (body.resourceType !== "Bundle" || body.type !== "transaction") {
